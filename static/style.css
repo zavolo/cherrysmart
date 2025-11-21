@@ -1851,6 +1851,202 @@ input[type="checkbox"]:focus {
         0 3px 8px rgba(0,0,0,0.5);
 }
 
+.confirm-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(6px);
+    z-index: 3500;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirm-modal.show {
+    display: flex;
+}
+
+.confirm-modal-content {
+    background: 
+        linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 50%, rgba(0,0,0,0.1) 100%),
+        linear-gradient(135deg, #234a38 0%, #1a3a2e 100%);
+    border: 2px solid rgba(0,0,0,0.6);
+    border-radius: 12px;
+    box-shadow: 
+        0 1px 0 rgba(255,255,255,0.15) inset,
+        0 -1px 0 rgba(0,0,0,0.5) inset,
+        0 8px 32px rgba(0,0,0,0.8),
+        0 16px 48px rgba(0,0,0,0.6);
+    max-width: 420px;
+    width: 90%;
+    position: relative;
+    padding: 24px;
+}
+
+.confirm-modal-content::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), transparent);
+    border-radius: 10px 10px 50% 50%;
+    pointer-events: none;
+}
+
+.confirm-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin: 0 auto 20px;
+    box-shadow: 
+        0 1px 0 rgba(255,255,255,0.4) inset,
+        0 -1px 0 rgba(0,0,0,0.5) inset,
+        0 6px 16px rgba(0,0,0,0.7);
+    border: 2px solid rgba(0,0,0,0.4);
+    position: relative;
+}
+
+.confirm-icon::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    right: 3px;
+    height: 45%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.4), transparent);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.confirm-icon.warning {
+    background: 
+        linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.3) 100%),
+        linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+    text-shadow: 
+        0 2px 4px rgba(0,0,0,0.6),
+        0 -1px 0 rgba(255,255,255,0.2);
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0%, 100% { 
+        box-shadow: 
+            0 1px 0 rgba(255,255,255,0.4) inset,
+            0 -1px 0 rgba(0,0,0,0.5) inset,
+            0 6px 16px rgba(0,0,0,0.7),
+            0 0 0 0 rgba(243,156,18,0);
+    }
+    50% { 
+        box-shadow: 
+            0 1px 0 rgba(255,255,255,0.4) inset,
+            0 -1px 0 rgba(0,0,0,0.5) inset,
+            0 6px 16px rgba(0,0,0,0.7),
+            0 0 20px 8px rgba(243,156,18,0.4);
+    }
+}
+
+.confirm-icon.danger {
+    background: 
+        linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.3) 100%),
+        linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+    text-shadow: 
+        0 2px 4px rgba(0,0,0,0.6),
+        0 -1px 0 rgba(255,255,255,0.2);
+    animation: pulse-danger 2s infinite;
+}
+
+@keyframes pulse-danger {
+    0%, 100% { 
+        box-shadow: 
+            0 1px 0 rgba(255,255,255,0.4) inset,
+            0 -1px 0 rgba(0,0,0,0.5) inset,
+            0 6px 16px rgba(0,0,0,0.7),
+            0 0 0 0 rgba(231,76,60,0);
+    }
+    50% { 
+        box-shadow: 
+            0 1px 0 rgba(255,255,255,0.4) inset,
+            0 -1px 0 rgba(0,0,0,0.5) inset,
+            0 6px 16px rgba(0,0,0,0.7),
+            0 0 20px 8px rgba(231,76,60,0.4);
+    }
+}
+
+.confirm-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #fff;
+    text-align: center;
+    margin-bottom: 12px;
+    text-shadow: 
+        0 2px 4px rgba(0,0,0,0.8),
+        0 -1px 0 rgba(255,255,255,0.1);
+}
+
+.confirm-message {
+    font-size: 15px;
+    color: rgba(232,240,238,0.9);
+    text-align: center;
+    line-height: 1.5;
+    margin-bottom: 24px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.confirm-actions .button {
+    min-width: 120px;
+    justify-content: center;
+}
+
+@media (max-width: 480px) {
+    .confirm-modal-content {
+        max-width: 340px;
+        padding: 20px;
+    }
+
+    .confirm-icon {
+        width: 54px;
+        height: 54px;
+        font-size: 28px;
+        margin-bottom: 16px;
+    }
+
+    .confirm-title {
+        font-size: 18px;
+        margin-bottom: 10px;
+    }
+
+    .confirm-message {
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+
+    .confirm-actions {
+        flex-direction: column;
+    }
+
+    .confirm-actions .button {
+        width: 100%;
+        min-width: auto;
+    }
+}
+
 *::selection {
     background: rgba(46,204,113,0.4);
     color: white;
