@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CherrySmart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <div class="logo-nav">
+                <span class="nav-title">CherrySmart</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link active"><i class="fas fa-chart-line"></i> Дашборд</a>
+                <a href="/users" class="nav-link" id="usersLink"><i class="fas fa-users"></i> Пользователи</a>
+                <a href="/settings" class="nav-link" id="settingsLink"><i class="fas fa-cog"></i> Настройки</a>
+                <a href="/logout" class="nav-link logout"><i class="fas fa-sign-out-alt"></i> Выйти</a>
+            </div>
+        </div>
+    </div>
+    <div class="main-content">
+        <div class="container">
+            <div class="sensor-status" id="sensorStatus">
+                <div class="status-indicator" id="statusIndicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Подключение...</span>
+                </div>
+                <span class="status-time" id="lastReading"></span>
+            </div>
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-icon temperature">
+                        <i class="fas fa-temperature-high"></i>
+                    </div>
+                    <div class="info-content">
+                        <span class="info-label">Температура</span>
+                        <span class="info-value large" id="currentTemp">--°C</span>
+                    </div>
+                </div>
+            </div>
+            <div class="stats-section">
+                <div class="stats-header">
+                    <h2><i class="fas fa-chart-bar"></i> Статистика за период</h2>
+                    <div class="period-selector">
+                        <button class="period-btn active" data-hours="1">1ч</button>
+                        <button class="period-btn" data-hours="6">6ч</button>
+                        <button class="period-btn" data-hours="24">24ч</button>
+                        <button class="period-btn" data-hours="168">7д</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-icon min">
+                            <i class="fas fa-arrow-down"></i>
+                        </div>
+                        <span class="stat-label">Минимум</span>
+                        <span class="stat-value" id="minTemp">--°C</span>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon max">
+                            <i class="fas fa-arrow-up"></i>
+                        </div>
+                        <span class="stat-label">Максимум</span>
+                        <span class="stat-value" id="maxTemp">--°C</span>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon avg">
+                            <i class="fas fa-equals"></i>
+                        </div>
+                        <span class="stat-label">Средняя</span>
+                        <span class="stat-value" id="avgTemp">--°C</span>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h3><i class="fas fa-thermometer-half"></i> График температуры</h3>
+                    <div class="chart-controls">
+                        <button class="chart-btn" onclick="toggleChart('temp')" title="Показать/скрыть">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-container" id="tempChartContainer">
+                    <canvas id="tempChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let ws;
+        let tempChart;
+        let currentPeriod = 1;
+        let currentStatus = null;
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: false 
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: { 
+                            color: 'rgba(0, 0, 0, 0.1)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: 'rgba(232, 240, 238, 0.8)',
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        }
+                    },
+                    x: {
+                        grid: { 
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: 'rgba(232, 240, 238, 0.8)',
+                            font: {
+                                size: 11,
+                                weight: '500'
+                            },
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    }
+                },
+                animation: { 
+                    duration: 300 
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        };
+
+        function initCharts() {
+            const tempCtx = document.getElementById('tempChart').getContext('2d');
+            tempChart = new Chart(tempCtx, {
+                ...chartConfig,
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Температура (°C)',
+                        data: [],
+                        borderColor: '#2ecc71',
+                        backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#2ecc71',
+                        pointBorderColor: 'rgba(0, 0, 0, 0.3)',
+                        pointBorderWidth: 2
+                    }]
+                }
+            });
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            ws.onopen = () => {
+                console.log('WebSocket подключен');
+            };
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);  
+                if (data.type === 'temperature_update') {
+                    updateCurrentData(data);
+                } else if (data.type === 'status_update') {
+                    updateSystemStatus(data.status);
+                }
+            };
+            ws.onclose = () => {
+                console.log('WebSocket отключен, переподключение...');
+                setTimeout(connectWebSocket, 3000);
+            };
+            ws.onerror = (error) => {
+                console.error('WebSocket ошибка:', error);
+            };
+        }
+
+        function updateSensorStatus(active, lastReadingText) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = indicator.querySelector('.status-text');
+            const lastReading = document.getElementById('lastReading');
+            if (active) {
+                indicator.classList.add('active');
+                statusText.textContent = 'Датчик активен';
+            } else {
+                indicator.classList.remove('active');
+                statusText.textContent = 'Нет связи с датчиком';
+            }
+            if (lastReadingText) {
+                lastReading.textContent = lastReadingText;
+            }
+        }
+
+		function updateSystemStatus(status) {
+			currentStatus = status;
+			const lastReading = document.getElementById('lastReading');
+			let lastReadingText = '--';
+			if (status.last_reading) {
+				const date = new Date(status.last_reading);
+				const now = Date.now();
+				const diffSeconds = Math.floor((now - date.getTime()) / 1000);
+				let timeAgo = '';
+				if (diffSeconds < 60) {
+					timeAgo = `${diffSeconds} сек назад`;
+				} else if (diffSeconds < 3600) {
+					timeAgo = `${Math.floor(diffSeconds / 60)} мин назад`;
+				} else if (diffSeconds < 86400) {
+					timeAgo = `${Math.floor(diffSeconds / 3600)} ч назад`;
+				} else {
+					timeAgo = date.toLocaleString('ru-RU');
+				}   
+				lastReadingText = ``;
+			}
+			updateSensorStatus(status.sensor_active, lastReadingText);
+			if (status.error_message) {
+				console.warn('Ошибка датчика:', status.error_message);
+			}
+		}
+
+        function updateCurrentData(data) {
+            document.getElementById('currentTemp').textContent = `${data.temperature.toFixed(1)}°C`;
+        }
+
+        async function loadHistory(hours = 24) {
+            try {
+                const response = await fetch(`/api/temperature/history?hours=${hours}&limit=200`);
+                const data = await response.json();
+                tempChart.data.labels = [];
+                tempChart.data.datasets[0].data = [];
+                data.forEach(item => {
+                    const time = new Date(item.timestamp).toLocaleTimeString('ru-RU', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    tempChart.data.labels.push(time);
+                    tempChart.data.datasets[0].data.push(item.temperature);
+                });
+                tempChart.update();
+            } catch (error) {
+                console.error('Ошибка загрузки истории:', error);
+            }
+        }
+
+        async function loadStats(hours = 24) {
+            try {
+                const response = await fetch(`/api/temperature/stats?hours=${hours}`);
+                const data = await response.json();
+                if (data.avg_temp) {
+                    document.getElementById('minTemp').textContent = `${data.min_temp}°C`;
+                    document.getElementById('maxTemp').textContent = `${data.max_temp}°C`;
+                    document.getElementById('avgTemp').textContent = `${data.avg_temp}°C`;
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки статистики:', error);
+            }
+        }
+
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/system/status');
+                const data = await response.json();
+                updateSystemStatus(data);
+            } catch (error) {
+                console.error('Ошибка загрузки статуса:', error);
+            }
+        }
+
+        async function loadCurrentTemperature() {
+            try {
+                const response = await fetch('/api/temperature/current');
+                const data = await response.json();
+                if (!data.error) {
+                    updateCurrentData(data);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки текущей температуры:', error);
+            }
+        }
+
+        function toggleChart(type) {
+            const container = document.getElementById('tempChartContainer');
+            container.style.display = container.style.display === 'none' ? 'block' : 'none';
+        }
+
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentPeriod = parseInt(btn.dataset.hours);
+                loadHistory(currentPeriod);
+                loadStats(currentPeriod);
+            });
+        });
+
+        initCharts();
+        loadCurrentTemperature();
+        loadHistory(currentPeriod);
+        loadStats(currentPeriod);
+        loadSystemStatus();
+        connectWebSocket(); 
+        setInterval(() => {
+            loadStats(currentPeriod);
+            loadHistory(currentPeriod);
+        }, 60000); 
+        setInterval(loadSystemStatus, 5000);
+    </script>
+</body>
+</html>

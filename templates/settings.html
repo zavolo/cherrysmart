@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настройки - CherrySmart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <div class="logo-nav">
+                <span class="nav-title">CherrySmart</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link"><i class="fas fa-chart-line"></i> Дашборд</a>
+                <a href="/users" class="nav-link"><i class="fas fa-users"></i> Пользователи</a>
+                <a href="/settings" class="nav-link active"><i class="fas fa-cog"></i> Настройки</a>
+                <a href="/logout" class="nav-link logout"><i class="fas fa-sign-out-alt"></i> Выйти</a>
+            </div>
+        </div>
+    </div>
+    <div class="main-content">
+        <div class="container">
+            <div class="page-header">
+                <h1><i class="fas fa-cog"></i> Настройки системы</h1>
+            </div>
+            <form id="settingsForm">
+                <div class="settings-section">
+                    <h2><i class="fas fa-thermometer-half"></i> Пороги температуры</h2>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Минимальная температура (°C)</label>
+                            <input type="number" name="temp_min" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Максимальная температура (°C)</label>
+                            <input type="number" name="temp_max" step="0.1" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h2><i class="fas fa-clock"></i> Интервалы</h2>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Интервал чтения датчика (секунды)</label>
+                            <input type="number" name="read_interval" min="10" max="3600" required>
+                            <small>Рекомендуется: 30-300 секунд</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Таймаут датчика (секунды)</label>
+                            <input type="number" name="sensor_timeout" min="60" max="600" required>
+                            <small>Время до предупреждения о неактивности</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="button secondary" onclick="loadSettings()">
+                        <i class="fas fa-undo"></i> Сбросить
+                    </button>
+                    <button type="submit" class="button primary">
+                        <i class="fas fa-save"></i> Сохранить настройки
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const settings = await response.json();
+                const form = document.getElementById('settingsForm');
+                Object.keys(settings).forEach(key => {
+                    const input = form.querySelector(`[name="${key}"]`);
+                    if (input) {
+                        input.value = settings[key];
+                    }
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки настроек:', error);
+                showNotification('Ошибка загрузки настроек', 'error');
+            }
+        }
+
+        document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const settings = Object.fromEntries(formData);
+            if (parseFloat(settings.temp_min) >= parseFloat(settings.temp_max)) {
+                showNotification('Минимальная температура должна быть меньше максимальной', 'error');
+                return;
+            }
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(settings)
+                });
+                if (response.ok) {
+                    showNotification('Настройки сохранены', 'success');
+                } else {
+                    const result = await response.json();
+                    showNotification(result.error || 'Ошибка сохранения', 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка сохранения настроек:', error);
+                showNotification('Ошибка сохранения настроек', 'error');
+            }
+        });
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                ${message}
+            `;
+            document.body.appendChild(notification);   
+            setTimeout(() => notification.classList.add('show'), 10);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        loadSettings();
+    </script>
+</body>
+</html>
