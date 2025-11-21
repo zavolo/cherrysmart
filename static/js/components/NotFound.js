@@ -1,4 +1,5 @@
 import Component from '../utils/Component.js'
+
 class NotFound extends Component {
   render() {
     return `
@@ -9,7 +10,7 @@ class NotFound extends Component {
           <p style="color: rgba(232,240,238,0.8); margin-bottom: 30px;">
             Запрашиваемая страница не существует
           </p>
-          <a href="/" class="button primary" data-route>
+          <a href="/" class="button primary" id="homeLink">
             <i class="fas fa-home"></i> На главную
           </a>
         </div>
@@ -18,7 +19,8 @@ class NotFound extends Component {
   }
 
   mount() {
-    const link = document.querySelector('[data-route]')
+    this._isMounted = true
+    const link = document.getElementById('homeLink')
     if (link) {
       link.addEventListener('click', (e) => {
         e.preventDefault()
@@ -26,7 +28,9 @@ class NotFound extends Component {
       })
     }
   }
-  unmount() {}
+  unmount() {
+    this._isMounted = false
+  }
 }
 
 export default NotFound

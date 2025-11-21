@@ -17,52 +17,89 @@ class Users extends Component {
   }
   
   async loadUsers() {
+    if (!this._isMounted) return
     try {
       const users = await api.get('/api/users')
-      this.setState({ users, loading: false })
+      if (!this._isMounted) return
+      this.state.users = users
+      this.state.loading = false 
+      const container = document.getElementById('app')
+      if (container && this._isMounted) {
+        container.innerHTML = this.render()
+        this.attachEventListeners()
+      }
     } catch (error) {
       console.error('Error loading users:', error)
     }
   }
   
   openAddModal() {
-    this.setState({ showAddModal: true })
+    this.state.showAddModal = true
+    this.updateModals()
   }
   
   closeAddModal() {
-    this.setState({ showAddModal: false })
-    document.getElementById('addUserForm').reset()
+    this.state.showAddModal = false
+    this.updateModals()
+    const form = document.getElementById('addUserForm')
+    if (form) form.reset()
   }
   
   openEditModal(userId) {
     const user = this.state.users.find(u => u.id === userId)
     if (user) {
-      this.setState({ 
-        showEditModal: true,
-        editingUser: user
-      })
+      this.state.showEditModal = true
+      this.state.editingUser = user
+      this.updateModals()
     }
   }
   
   closeEditModal() {
-    this.setState({ 
-      showEditModal: false,
-      editingUser: null
-    })
+    this.state.showEditModal = false
+    this.state.editingUser = null
+    this.updateModals()
   }
   
   showConfirm(message, callback) {
-    this.setState({
-      confirmMessage: message,
-      confirmCallback: callback
-    })
+    this.state.confirmMessage = message
+    this.state.confirmCallback = callback
+    this.updateModals()
   }
   
   closeConfirm() {
-    this.setState({
-      confirmMessage: '',
-      confirmCallback: null
-    })
+    this.state.confirmMessage = ''
+    this.state.confirmCallback = null
+    this.updateModals()
+  }
+  
+  updateModals() {
+    if (!this._isMounted) return
+    const addModal = document.getElementById('addUserModal')
+    const editModal = document.getElementById('editUserModal')
+    const confirmModal = document.getElementById('confirmModal')
+    if (addModal) {
+      addModal.className = `modal ${this.state.showAddModal ? 'show' : ''}`
+    }
+    if (editModal) {
+      editModal.className = `modal ${this.state.showEditModal ? 'show' : ''}`
+      if (this.state.showEditModal && this.state.editingUser) {
+        const form = document.getElementById('editUserForm')
+        if (form) {
+          form.querySelector('[name="user_id"]').value = this.state.editingUser.id
+          form.querySelector('[name="username"]').value = this.state.editingUser.username
+          form.querySelector('[name="role"]').value = this.state.editingUser.role
+          form.querySelector('[name="telegram_id"]').value = this.state.editingUser.telegram_id || ''
+          form.querySelector('[name="notifications_enabled"]').checked = this.state.editingUser.notifications_enabled
+        }
+      }
+    }
+    if (confirmModal) {
+      confirmModal.className = `confirm-modal ${this.state.confirmMessage ? 'show' : ''}`
+      const messageEl = document.getElementById('confirmMessage')
+      if (messageEl) {
+        messageEl.innerHTML = this.state.confirmMessage
+      }
+    }
   }
   
   async handleAddUser(e) {
@@ -125,6 +162,63 @@ class Users extends Component {
         }
       }
     )
+  }
+  
+  attachEventListeners() {
+    if (!this._isMounted) return
+    const addBtn = document.getElementById('addUserBtn')
+    if (addBtn) {
+      addBtn.addEventListener('click', () => this.openAddModal())
+    }
+    const closeAddBtn = document.getElementById('closeAddModalBtn')
+    if (closeAddBtn) {
+      closeAddBtn.addEventListener('click', () => this.closeAddModal())
+    }
+    const cancelAddBtn = document.getElementById('cancelAddBtn')
+    if (cancelAddBtn) {
+      cancelAddBtn.addEventListener('click', () => this.closeAddModal())
+    }
+    const addForm = document.getElementById('addUserForm')
+    if (addForm) {
+      addForm.addEventListener('submit', (e) => this.handleAddUser(e))
+    }
+    const closeEditBtn = document.getElementById('closeEditModalBtn')
+    if (closeEditBtn) {
+      closeEditBtn.addEventListener('click', () => this.closeEditModal())
+    }
+    const cancelEditBtn = document.getElementById('cancelEditBtn')
+    if (cancelEditBtn) {
+      cancelEditBtn.addEventListener('click', () => this.closeEditModal())
+    }
+    const editForm = document.getElementById('editUserForm')
+    if (editForm) {
+      editForm.addEventListener('submit', (e) => this.handleEditUser(e))
+    }
+    
+    document.querySelectorAll('.action-btn.edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.openEditModal(parseInt(btn.dataset.userId))
+      })
+    })
+    
+    document.querySelectorAll('.action-btn.delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.deleteUser(parseInt(btn.dataset.userId), btn.dataset.username)
+      })
+    })
+    const cancelConfirmBtn = document.getElementById('cancelConfirmBtn')
+    if (cancelConfirmBtn) {
+      cancelConfirmBtn.addEventListener('click', () => this.closeConfirm())
+    } 
+    const confirmBtn = document.getElementById('confirmBtn')
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', () => {
+        if (this.state.confirmCallback) {
+          this.state.confirmCallback()
+          this.closeConfirm()
+        }
+      })
+    }
   }
   
   render() {
@@ -254,7 +348,7 @@ class Users extends Component {
             <i class="fas fa-exclamation-triangle"></i>
           </div>
           <h3 class="confirm-title">Подтверждение действия</h3>
-          <p class="confirm-message">${this.state.confirmMessage}</p>
+          <p class="confirm-message" id="confirmMessage">${this.state.confirmMessage}</p>
           <div class="confirm-actions">
             <button class="button secondary" id="cancelConfirmBtn">Отмена</button>
             <button class="button primary" id="confirmBtn">Удалить</button>
@@ -263,81 +357,13 @@ class Users extends Component {
       </div>
     `
   }
-  
   mount() {
+    this._isMounted = true
     this.loadUsers()
-    const addBtn = document.getElementById('addUserBtn')
-    if (addBtn) {
-      addBtn.addEventListener('click', () => this.openAddModal())
-    }
-    
-    const closeAddBtn = document.getElementById('closeAddModalBtn')
-    if (closeAddBtn) {
-      closeAddBtn.addEventListener('click', () => this.closeAddModal())
-    }
-    
-    const cancelAddBtn = document.getElementById('cancelAddBtn')
-    if (cancelAddBtn) {
-      cancelAddBtn.addEventListener('click', () => this.closeAddModal())
-    }
-    
-    const addForm = document.getElementById('addUserForm')
-    if (addForm) {
-      addForm.addEventListener('submit', (e) => this.handleAddUser(e))
-    }
-    
-    const closeEditBtn = document.getElementById('closeEditModalBtn')
-    if (closeEditBtn) {
-      closeEditBtn.addEventListener('click', () => this.closeEditModal())
-    }
-    
-    const cancelEditBtn = document.getElementById('cancelEditBtn')
-    if (cancelEditBtn) {
-      cancelEditBtn.addEventListener('click', () => this.closeEditModal())
-    }
-    
-    const editForm = document.getElementById('editUserForm')
-    if (editForm) {
-      editForm.addEventListener('submit', (e) => this.handleEditUser(e))
-    }
-    
-    document.querySelectorAll('.action-btn.edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.openEditModal(parseInt(btn.dataset.userId))
-      })
-    })
-    
-    document.querySelectorAll('.action-btn.delete').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.deleteUser(parseInt(btn.dataset.userId), btn.dataset.username)
-      })
-    })
-
-    const cancelConfirmBtn = document.getElementById('cancelConfirmBtn')
-    if (cancelConfirmBtn) {
-      cancelConfirmBtn.addEventListener('click', () => this.closeConfirm())
-    }
-    const confirmBtn = document.getElementById('confirmBtn')
-    if (confirmBtn) {
-      confirmBtn.addEventListener('click', () => {
-        if (this.state.confirmCallback) {
-          this.state.confirmCallback()
-          this.closeConfirm()
-        }
-      })
-    }
-
-    window.addEventListener('click', (e) => {
-      if (e.target.classList.contains('modal')) {
-        this.closeAddModal()
-        this.closeEditModal()
-      }
-      if (e.target.classList.contains('confirm-modal')) {
-        this.closeConfirm()
-      }
-    })
   }
-  unmount() {}
+  unmount() {
+    this._isMounted = false
+  }
 }
 
 export default Users

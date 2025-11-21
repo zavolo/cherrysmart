@@ -14,13 +14,11 @@ class Dashboard extends Component {
     }
     this.ws = null
     this.chart = null
-    this.mounted = false
-    this.chartCanvas = null
+    this.loadDataBound = this.loadData.bind(this)
   }
   
   async loadData() {
-    if (!this.mounted) return
-    
+    if (!this._isMounted) return
     try {
       const [current, stats, history, status] = await Promise.all([
         api.get('/api/temperature/current'),
@@ -28,17 +26,18 @@ class Dashboard extends Component {
         api.get(`/api/temperature/history?hours=${this.state.currentPeriod}&limit=200`),
         api.get('/api/system/status')
       ])
-      
-      if (!this.mounted) return
-      
-      this.setState({
-        currentTemp: current,
-        stats: stats,
-        chartData: history,
-        sensorStatus: status,
-        loading: false
-      })
-      this.updateChart()
+      if (!this._isMounted) return
+      this.state.currentTemp = current
+      this.state.stats = stats
+      this.state.chartData = history
+      this.state.sensorStatus = status
+      this.state.loading = false 
+      const container = document.getElementById('app')
+      if (container && this._isMounted) {
+        container.innerHTML = this.render()
+        this.attachEventListeners()
+        this.initChart()
+      }
     } catch (error) {
       console.error('Error loading data:', error)
     }
@@ -49,122 +48,163 @@ class Dashboard extends Component {
       this.ws.close()
       this.ws = null
     }
-    
-    this.ws = new WebSocket(`ws://${window.location.host}/ws`)
-    
+    const wsUrl = `ws://${window.location.host}/ws`
+    this.ws = new WebSocket(wsUrl)
     this.ws.onmessage = (event) => {
-      if (!this.mounted) return
-      
-      const data = JSON.parse(event.data)
-      if (data.type === 'temperature_update') {
-        this.setState({ currentTemp: data })
-      } else if (data.type === 'status_update') {
-        this.setState({ sensorStatus: data.status })
+      if (!this._isMounted) return 
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'temperature_update') {
+          this.state.currentTemp = data
+          this.updateDisplay()
+        } else if (data.type === 'status_update') {
+          this.state.sensorStatus = data.status
+          this.updateDisplay()
+        }
+      } catch (error) {
+        console.error('WebSocket message error:', error)
       }
     }
-    
     this.ws.onclose = () => {
-      if (this.mounted) {
+      if (this._isMounted) {
         setTimeout(() => {
-          if (this.mounted) {
+          if (this._isMounted) {
             this.connectWebSocket()
           }
         }, 3000)
       }
     }
-    
     this.ws.onerror = (error) => {
       console.error('WebSocket error:', error)
     }
   }
   
+  updateDisplay() {
+    if (!this._isMounted) return
+    const tempElement = document.querySelector('.info-value.large')
+    if (tempElement && this.state.currentTemp) {
+      tempElement.textContent = `${this.state.currentTemp.temperature.toFixed(1)}°C`
+    }
+    const statusIndicator = document.querySelector('.status-indicator')
+    const statusText = document.querySelector('.status-text')
+    const statusTime = document.querySelector('.status-time')
+    if (statusIndicator && statusText && this.state.sensorStatus) {
+      const isActive = this.state.sensorStatus.sensor_active
+      if (isActive) {
+        statusIndicator.classList.add('active')
+        statusText.textContent = 'Датчик активен'
+      } else {
+        statusIndicator.classList.remove('active')
+        statusText.textContent = 'Нет связи с датчиком'
+      }
+    }
+    if (statusTime) {
+      statusTime.textContent = this.formatLastReading()
+    }
+  }
+  
   initChart() {
+    if (!this._isMounted) return
     if (this.chart) {
-      this.chart.destroy()
+      try {
+        this.chart.destroy()
+      } catch (e) {
+        console.error('Chart destroy error:', e)
+      }
       this.chart = null
     }
-    
     const canvas = document.getElementById('tempChart')
     if (!canvas) return
-    
-    this.chartCanvas = canvas
-    const ctx = canvas.getContext('2d')
-    
-    this.chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Температура (°C)',
-          data: [],
-          borderColor: '#2ecc71',
-          backgroundColor: 'rgba(46, 204, 113, 0.15)',
-          borderWidth: 3,
-          tension: 0.4,
-          fill: true,
-          pointRadius: 3,
-          pointHoverRadius: 6,
-          pointBackgroundColor: '#2ecc71',
-          pointBorderColor: 'rgba(0, 0, 0, 0.3)',
-          pointBorderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }
+    try {
+      const ctx = canvas.getContext('2d')
+      this.chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: this.state.chartData.map(item => {
+            const time = new Date(item.timestamp)
+            return time.toLocaleTimeString('ru-RU', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          }),
+          datasets: [{
+            label: 'Температура (°C)',
+            data: this.state.chartData.map(item => item.temperature),
+            borderColor: '#2ecc71',
+            backgroundColor: 'rgba(46, 204, 113, 0.15)',
+            borderWidth: 3,
+            tension: 0.4,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#2ecc71',
+            pointBorderColor: 'rgba(0, 0, 0, 0.3)',
+            pointBorderWidth: 2
+          }]
         },
-        scales: {
-          y: {
-            beginAtZero: false,
-            grid: { 
-              color: 'rgba(0, 0, 0, 0.1)',
-              drawBorder: false
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: false,
+              grid: { 
+                color: 'rgba(0, 0, 0, 0.1)',
+                drawBorder: false
+              },
+              ticks: {
+                color: 'rgba(232, 240, 238, 0.8)',
+                font: { size: 12, weight: '500' }
+              }
             },
-            ticks: {
-              color: 'rgba(232, 240, 238, 0.8)',
-              font: { size: 12, weight: '500' }
+            x: {
+              grid: { 
+                color: 'rgba(0, 0, 0, 0.05)',
+                drawBorder: false
+              },
+              ticks: {
+                color: 'rgba(232, 240, 238, 0.8)',
+                font: { size: 11, weight: '500' },
+                maxRotation: 45,
+                minRotation: 0
+              }
             }
           },
-          x: {
-            grid: { 
-              color: 'rgba(0, 0, 0, 0.05)',
-              drawBorder: false
-            },
-            ticks: {
-              color: 'rgba(232, 240, 238, 0.8)',
-              font: { size: 11, weight: '500' },
-              maxRotation: 45,
-              minRotation: 0
-            }
+          animation: { duration: 300 },
+          interaction: {
+            intersect: false,
+            mode: 'index'
           }
-        },
-        animation: { duration: 300 },
-        interaction: {
-          intersect: false,
-          mode: 'index'
         }
-      }
-    })
+      })
+    } catch (error) {
+      console.error('Chart init error:', error)
+    }
   }
   
   updateChart() {
-    if (!this.chart || !this.mounted) return
-    
-    this.chart.data.labels = this.state.chartData.map(item => {
-      const time = new Date(item.timestamp)
-      return time.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
+    if (!this.chart || !this._isMounted) return
+    try {
+      this.chart.data.labels = this.state.chartData.map(item => {
+        const time = new Date(item.timestamp)
+        return time.toLocaleTimeString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
       })
-    })
-    this.chart.data.datasets[0].data = this.state.chartData.map(item => item.temperature)
-    this.chart.update('none')
+      this.chart.data.datasets[0].data = this.state.chartData.map(item => item.temperature)
+      this.chart.update('none')
+    } catch (error) {
+      console.error('Chart update error:', error)
+    }
   }
   
   changePeriod(hours) {
-    this.setState({ currentPeriod: hours })
+    if (!this._isMounted) return
+    this.state.currentPeriod = hours
     this.loadData()
   }
   
@@ -190,6 +230,19 @@ class Dashboard extends Component {
       return `${Math.floor(diffSeconds / 3600)} ч назад`
     } else {
       return date.toLocaleString('ru-RU')
+    }
+  }
+  
+  attachEventListeners() {
+    if (!this._isMounted) return
+    document.querySelectorAll('.period-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.changePeriod(parseInt(btn.dataset.hours))
+      })
+    })
+    const toggleBtn = document.getElementById('toggleChartBtn')
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => this.toggleChart())
     }
   }
   
@@ -271,39 +324,29 @@ class Dashboard extends Component {
   }
   
   mount() {
-    this.mounted = true
+    this._isMounted = true
     this.loadData()
     this.connectWebSocket()
-    
-    setTimeout(() => {
-      if (this.mounted) {
-        this.initChart()
-      }
-    }, 100)
-    
-    document.querySelectorAll('.period-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.changePeriod(parseInt(btn.dataset.hours))
-      })
-    })
-    const toggleBtn = document.getElementById('toggleChartBtn')
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => this.toggleChart())
-    }
   }
   
   unmount() {
-    this.mounted = false
-    
+    this._isMounted = false
     if (this.ws) {
-      this.ws.close()
+      try {
+        this.ws.close()
+      } catch (e) {
+        console.error('WebSocket close error:', e)
+      }
       this.ws = null
     }
     if (this.chart) {
-      this.chart.destroy()
+      try {
+        this.chart.destroy()
+      } catch (e) {
+        console.error('Chart destroy error:', e)
+      }
       this.chart = null
     }
-    this.chartCanvas = null
   }
 }
 

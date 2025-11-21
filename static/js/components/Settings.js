@@ -12,9 +12,17 @@ class Settings extends Component {
   }
   
   async loadSettings() {
+    if (!this._isMounted) return
     try {
       const settings = await api.get('/api/settings')
-      this.setState({ settings, loading: false })
+      if (!this._isMounted) return
+      this.state.settings = settings
+      this.state.loading = false
+      const container = document.getElementById('app')
+      if (container && this._isMounted) {
+        container.innerHTML = this.render()
+        this.attachEventListeners()
+      }
     } catch (error) {
       console.error('Error loading settings:', error)
       showNotification('Ошибка загрузки настроек', 'error')
@@ -39,6 +47,18 @@ class Settings extends Component {
     } catch (error) {
       console.error('Error saving settings:', error)
       showNotification('Ошибка сохранения настроек', 'error')
+    }
+  }
+  
+  attachEventListeners() {
+    if (!this._isMounted) return
+    const form = document.getElementById('settingsForm')
+    if (form) {
+      form.addEventListener('submit', (e) => this.handleSubmit(e))
+    }  
+    const resetBtn = document.getElementById('resetBtn')
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => this.loadSettings())
     }
   }
   
@@ -115,17 +135,12 @@ class Settings extends Component {
   }
   
   mount() {
+    this._isMounted = true
     this.loadSettings()
-    const form = document.getElementById('settingsForm')
-    if (form) {
-      form.addEventListener('submit', (e) => this.handleSubmit(e))
-    } 
-    const resetBtn = document.getElementById('resetBtn')
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => this.loadSettings())
-    }
   }
-  unmount() {}
+  unmount() {
+    this._isMounted = false
+  }
 }
 
 export default Settings

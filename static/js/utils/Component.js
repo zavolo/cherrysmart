@@ -2,33 +2,32 @@ class Component {
   constructor(props = {}) {
     this.props = props
     this.state = {}
-    this._updateScheduled = false
+    this._isMounted = false
   }
   
   setState(newState) {
+    if (!this._isMounted) return
     this.state = { ...this.state, ...newState }
-    if (!this._updateScheduled) {
-      this._updateScheduled = true
-      requestAnimationFrame(() => {
-        this._updateScheduled = false
-        this.update()
-      })
-    }
+    this.update()
   }
   
   render() {
-    return '<div></div>'
+    return '<div>Override this</div>'
   }
   
-  mount() {}
-  unmount() {}
+  mount() {
+    this._isMounted = true
+  }
+  
+  unmount() {
+    this._isMounted = false
+  }
   
   update() {
+    if (!this._isMounted) return
     const container = document.getElementById('app')
     if (container) {
-      const scrollTop = container.scrollTop
       container.innerHTML = this.render()
-      container.scrollTop = scrollTop
       this.mount()
     }
   }
