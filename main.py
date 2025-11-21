@@ -213,13 +213,13 @@ async def index():
 @login_required
 @admin_required
 async def users_page():
-    return await render_template('users.html')
+    return await render_template('index.html')
 
 @app.route('/settings')
 @login_required
 @admin_required
 async def settings_page():
-    return await render_template('settings.html')
+    return await render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 async def login():
