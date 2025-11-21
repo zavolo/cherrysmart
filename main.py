@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Optional
+from collections import defaultdict
 from quart import Quart, render_template, request, jsonify, session, redirect, url_for, websocket
 from quart_cors import cors
 from bcrypt import checkpw, hashpw, gensalt
@@ -30,6 +31,9 @@ connected_clients = set()
 DS3231_ADDRESS = 0x68
 TEMP_REG = 0x11
 SENSOR_TIMEOUT = 120
+login_attempts = defaultdict(list)
+MAX_ATTEMPTS = 5
+LOCKOUT_DURATION = timedelta(minutes=15)
 
 class SensorReader:
     def __init__(self):
@@ -37,6 +41,7 @@ class SensorReader:
         self.read_interval = 60
         self.is_running = False
         self.last_successful_read = None
+        self.calibration_offset = 0.0
         
     async def init_bus(self):
         try:
@@ -52,8 +57,9 @@ class SensorReader:
     async def read_temperature(self):
         try:
             data = self.bus.read_i2c_block_data(DS3231_ADDRESS, TEMP_REG, 2)
-            temp = data[0] + (data[1] >> 6) * 0.25
-            return temp
+            raw_temp = data[0] + (data[1] >> 6) * 0.25
+            calibrated_temp = raw_temp + self.calibration_offset
+            return calibrated_temp
         except Exception as e:
             error_msg = f"Ошибка чтения температуры: {str(e)}"
             logger.error(error_msg)
@@ -102,7 +108,14 @@ class SensorReader:
                 new_interval = int(setting.value)
                 if new_interval != self.read_interval:
                     self.read_interval = new_interval
-                    logger.info(f"Интервал чтения изменен на {self.read_interval}с")
+                    logger.info(f"Интервал чтения изменен на {self.read_interval}с")     
+            calib_result = await db.execute(select(Settings).where(Settings.name == 'temp_calibration'))
+            calib_setting = calib_result.scalar_one_or_none()
+            if calib_setting:
+                new_offset = float(calib_setting.value)
+                if new_offset != self.calibration_offset:
+                    self.calibration_offset = new_offset
+                    logger.info(f"Калибровка температуры: {self.calibration_offset:+.2f}°C")
     
     async def run(self):
         retry_count = 0
@@ -124,7 +137,7 @@ class SensorReader:
                 await self.load_settings()
                 temp = await self.read_temperature()
                 await self.save_reading(temp)
-                logger.info(f"Температура: {temp}°C")
+                logger.info(f"Температура: {temp:.2f}°C")
                 consecutive_errors = 0
             except Exception as e:
                 consecutive_errors += 1
@@ -157,6 +170,17 @@ class SensorReader:
                 pass
 
 sensor_reader = SensorReader()
+
+def is_ip_locked(ip_address):
+    now = datetime.now()
+    attempts = login_attempts[ip_address]
+    attempts[:] = [attempt for attempt in attempts if now - attempt < LOCKOUT_DURATION]
+    if len(attempts) >= MAX_ATTEMPTS:
+        return True
+    return False
+
+def record_failed_attempt(ip_address):
+    login_attempts[ip_address].append(datetime.now())
 
 def login_required(f):
     @wraps(f)
@@ -200,6 +224,11 @@ async def settings_page():
 @app.route('/login', methods=['GET', 'POST'])
 async def login():
     if request.method == 'POST':
+        client_ip = request.remote_addr
+        if is_ip_locked(client_ip):
+            logger.warning(f"Заблокирована попытка входа с IP {client_ip}")
+            return await render_template('login.html', 
+                error='Слишком много неудачных попыток. Попробуйте через 15 минут')
         form = await request.form
         username = form.get('username')
         password = form.get('password')
@@ -210,9 +239,11 @@ async def login():
                 session['user_id'] = user.id
                 session['username'] = user.username
                 session['role'] = user.role
-                logger.info(f"Успешный вход пользователя: {username}")
+                login_attempts[client_ip].clear()
+                logger.info(f"Успешный вход пользователя: {username} с IP {client_ip}")
                 return redirect(url_for('index'))
-        logger.warning(f"Неудачная попытка входа: {username}")
+        record_failed_attempt(client_ip)
+        logger.warning(f"Неудачная попытка входа: {username} с IP {client_ip}")
         return await render_template('login.html', error='Неверные учетные данные')
     return await render_template('login.html')
 
@@ -478,12 +509,44 @@ async def monitor_and_broadcast():
 async def broadcast_settings_update(settings):
     await broadcast_message({'type': 'settings_update', 'settings': settings})
 
+async def cleanup_old_data():
+    while True:
+        try:
+            await asyncio.sleep(86400)
+            async with AsyncSessionLocal() as db:
+                retention_result = await db.execute(
+                    select(Settings).where(Settings.name == 'data_retention_days')
+                )
+                retention_setting = retention_result.scalar_one_or_none()
+                retention_days = int(retention_setting.value) if retention_setting else 30
+                cutoff_date = datetime.now() - timedelta(days=retention_days)
+                result = await db.execute(
+                    select(TemperatureData).where(TemperatureData.timestamp < cutoff_date)
+                )
+                old_records = result.scalars().all()
+                for record in old_records:
+                    await db.delete(record)
+                await db.commit()
+                if old_records:
+                    logger.info(f"Удалено {len(old_records)} старых записей температуры")
+        except Exception as e:
+            logger.error(f"Ошибка очистки старых данных: {e}")
+
 @app.before_serving
 async def startup():
     logger.info("Запуск приложения...")
     await init_db()
+    async with AsyncSessionLocal() as db:
+        calib_result = await db.execute(select(Settings).where(Settings.name == 'temp_calibration'))
+        if not calib_result.scalar_one_or_none():
+            db.add(Settings(name='temp_calibration', value='0.0'))
+        retention_result = await db.execute(select(Settings).where(Settings.name == 'data_retention_days'))
+        if not retention_result.scalar_one_or_none():
+            db.add(Settings(name='data_retention_days', value='30'))
+        await db.commit()
     asyncio.create_task(monitor_and_broadcast())
     asyncio.create_task(sensor_reader.run())
+    asyncio.create_task(cleanup_old_data())
     logger.info("Приложение успешно запущено")
 
 if __name__ == '__main__':
