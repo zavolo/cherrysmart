@@ -1,15 +1,12 @@
 const api = {
   getHeaders() {
-    const token = localStorage.getItem('token');
     return {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : ''
+      'Content-Type': 'application/json'
     };
   },
 
   async handleResponse(response) {
-    if (response.status === 401) {
-      localStorage.removeItem('token');
+    if (response.status === 401 || response.status === 403) {
       window.location.href = '/login';
       throw new Error('Unauthorized');
     }
@@ -18,6 +15,7 @@ const api = {
 
   async get(url) {
     const response = await fetch(url, {
+      credentials: 'same-origin',
       headers: this.getHeaders()
     });
     return this.handleResponse(response);
@@ -26,6 +24,7 @@ const api = {
   async post(url, data) {
     const response = await fetch(url, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
@@ -35,6 +34,7 @@ const api = {
   async put(url, data) {
     const response = await fetch(url, {
       method: 'PUT',
+      credentials: 'same-origin',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
@@ -44,6 +44,7 @@ const api = {
   async delete(url) {
     const response = await fetch(url, {
       method: 'DELETE',
+      credentials: 'same-origin',
       headers: this.getHeaders()
     });
     return this.handleResponse(response);

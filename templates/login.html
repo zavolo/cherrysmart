@@ -122,11 +122,7 @@
                 0 -1px 0 rgba(0,0,0,0.4) inset,
                 0 3px 8px rgba(0,0,0,0.5),
                 0 0 15px rgba(231,76,60,0.3);
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
+            display: {% if error %}block{% else %}none{% endif %};
         }
 
         .error-message p {
@@ -279,19 +275,20 @@
 <body>
     <div class="login-container">
         <div class="login-header">
-            <div class="login-logo"></div>
             <h1>Вход в систему</h1>
             <p class="subtitle">Введите свои учетные данные</p>
         </div>
-        <div class="error-message" id="errorMessage">
-            <p><i class="fas fa-exclamation-circle"></i><span id="errorText"></span></p>
+        {% if error %}
+        <div class="error-message">
+            <p><i class="fas fa-exclamation-circle"></i>{{ error }}</p>
         </div>
-        <form id="loginForm">
+        {% endif %}
+        <form method="POST" action="/login">
             <div class="form-group">
                 <label>
                     <i class="fas fa-user"></i>Логин
                 </label>
-                <input type="text" name="username" required placeholder="Введите логин" autocomplete="username">
+                <input type="text" name="username" required placeholder="Введите логин" autocomplete="username" autofocus>
             </div>
             <div class="form-group">
                 <label>
@@ -299,50 +296,10 @@
                 </label>
                 <input type="password" name="password" required placeholder="Введите пароль" autocomplete="current-password">
             </div>
-            <button type="submit" class="submit-button" id="submitBtn">
+            <button type="submit" class="submit-button">
                 <i class="fas fa-sign-in-alt"></i>Войти
             </button>
         </form>
     </div>
-    <script>
-        const form = document.getElementById('loginForm');
-        const errorMessage = document.getElementById('errorMessage');
-        const errorText = document.getElementById('errorText');
-        const submitBtn = document.getElementById('submitBtn');
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(form);
-            const data = {
-                username: formData.get('username'),
-                password: formData.get('password')
-            };
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Вход...';
-            errorMessage.classList.remove('show');
-            try {
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-                const result = await response.json();
-                if (response.ok && result.token) {
-                    localStorage.setItem('token', result.token);
-                    window.location.href = '/';
-                } else {
-                    errorText.textContent = result.error || 'Неверные учетные данные';
-                    errorMessage.classList.add('show');
-                }
-            } catch (error) {
-                errorText.textContent = 'Ошибка соединения с сервером';
-                errorMessage.classList.add('show');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i>Войти';
-            }
-        });
-    </script>
 </body>
 </html>
