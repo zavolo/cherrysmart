@@ -11,7 +11,7 @@ from quart_cors import cors
 from bcrypt import checkpw, hashpw, gensalt
 from sqlalchemy import select, func, desc
 from sqlalchemy.exc import IntegrityError
-from database import AsyncSessionLocal, User, TemperatureData, Settings, SystemStatus, Notification, init_db, now_moscow
+from database import AsyncSessionLocal, User, TemperatureData, Settings, SystemStatus, Notification, init_db, now_moscow, TIMEZONE
 from dotenv import load_dotenv
 from smbus2 import SMBus
 
