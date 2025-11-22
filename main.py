@@ -556,7 +556,11 @@ async def get_system_status():
             is_active = status.sensor_active
             time_since_reading = None
             if status.last_reading:
-                time_since_reading = (now_moscow() - status.last_reading).total_seconds()
+                current_time = now_moscow()
+                last_reading_time = status.last_reading
+                if last_reading_time.tzinfo is None:
+                    last_reading_time = last_reading_time.replace(tzinfo=TIMEZONE)
+                time_since_reading = (current_time - last_reading_time).total_seconds()
                 if time_since_reading > SENSOR_TIMEOUT:
                     is_active = False
             else:
@@ -805,7 +809,11 @@ async def monitor_and_broadcast():
                 is_sensor_active = False
                 time_since_reading = None
                 if status and status.last_reading:
-                    time_since_reading = (now_moscow() - status.last_reading).total_seconds()
+                    current_time = now_moscow()
+                    last_reading_time = status.last_reading
+                    if last_reading_time.tzinfo is None:
+                        last_reading_time = last_reading_time.replace(tzinfo=TIMEZONE)
+                    time_since_reading = (current_time - last_reading_time).total_seconds()
                     is_sensor_active = status.sensor_active and time_since_reading < SENSOR_TIMEOUT
                 if data:
                     await broadcast_message({
