@@ -13,19 +13,31 @@
     <div class="nav-bar">
         <div class="nav-content">
             <div class="logo-nav">
+                <div class="logo-small"></div>
                 <span class="nav-title">CherrySmart</span>
             </div>
             <div class="nav-links">
                 <a href="/" class="nav-link"><i class="fas fa-chart-line"></i> Дашборд</a>
                 <a href="/users" class="nav-link"><i class="fas fa-users"></i> Пользователи</a>
                 <a href="/settings" class="nav-link"><i class="fas fa-cog"></i> Настройки</a>
-                <a href="/logout" class="nav-link logout"><i class="fas fa-sign-out-alt"></i> Выйти</a>
+                <a href="#" class="nav-link logout" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Выйти</a>
             </div>
         </div>
     </div>
     <div class="main-content">
         <div id="app"></div>
     </div>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+    </script>
     <script type="module" src="{{ url_for('static', filename='js/router.js') }}"></script>
 </body>
 </html>

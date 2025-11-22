@@ -405,6 +405,29 @@ async def logout():
     logger.info(f"Выход пользователя: {username}")
     return redirect(url_for('login'))
 
+@app.route('/api/auth/login', methods=['POST'])
+async def web_login():
+    client_ip = request.remote_addr
+    if is_ip_locked(client_ip):
+        logger.warning(f"Заблокирована попытка входа с IP {client_ip}")
+        return jsonify({'error': 'Слишком много неудачных попыток. Попробуйте через 15 минут'}), 429
+    data = await request.json
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'error': 'Необходимо указать логин и пароль'}), 400
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.username == username))
+        user = result.scalar_one_or_none()
+        if user and checkpw(password.encode(), user.password.encode()):
+            login_attempts[client_ip].clear()
+            token = create_jwt_token(user.id, user.username, user.role)
+            logger.info(f"Успешный вход пользователя: {username} с IP {client_ip}")
+            return jsonify({'token': token})
+    record_failed_attempt(client_ip)
+    logger.warning(f"Неудачная попытка входа: {username} с IP {client_ip}")
+    return jsonify({'error': 'Неверные учетные данные'}), 401
+
 @app.route('/api/telegram/login', methods=['POST'])
 async def telegram_login():
     data = await request.json
