@@ -2,16 +2,23 @@ import os
 from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
-from sqlalchemy import String, Integer, Float, DateTime, Enum, BigInteger, Text, Boolean, select
+from sqlalchemy import String, Integer, Float, DateTime, Enum, BigInteger, Text, Boolean, select, ForeignKey
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from bcrypt import hashpw, gensalt
+from zoneinfo import ZoneInfo
 load_dotenv()
+TIMEZONE = ZoneInfo('Europe/Moscow')
+def now_moscow():
+    return datetime.now(TIMEZONE)
+
 DATABASE_URL = f"mysql+aiomysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
 class Base(DeclarativeBase):
     pass
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -20,17 +27,20 @@ class User(Base):
     role: Mapped[str] = mapped_column(Enum('admin', 'user'), default='user')
     telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True, nullable=True)
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_moscow)
+
 class TemperatureData(Base):
     __tablename__ = "temperature_data"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     temperature: Mapped[float] = mapped_column(Float, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=now_moscow, index=True)
+
 class Settings(Base):
     __tablename__ = "settings"
     name: Mapped[str] = mapped_column(String(50), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_moscow, onupdate=now_moscow)
+
 class SystemStatus(Base):
     __tablename__ = "system_status"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -38,9 +48,21 @@ class SystemStatus(Base):
     last_reading: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str] = mapped_column(Enum('info', 'warning', 'error', 'success'), default='info')
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_moscow, index=True)
+
 async def get_session():
     async with AsyncSessionLocal() as session:
         yield session
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
