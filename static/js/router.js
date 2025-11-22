@@ -2,10 +2,11 @@ import Dashboard from './components/Dashboard.js'
 import Users from './components/Users.js'
 import Settings from './components/Settings.js'
 import NotFound from './components/NotFound.js'
-
+import api from './utils/api.js'
 let currentComponent = null
 let isTransitioning = false
 let currentPath = '/'
+let isInitialized = false
 
 function updateNavLinks(path) {
   document.querySelectorAll('.nav-link').forEach(link => {
@@ -17,30 +18,29 @@ function updateNavLinks(path) {
   })
 }
 
-function renderComponent(ComponentClass, path, props = {}) {
+async function renderComponent(ComponentClass, path, props = {}) {
   if (isTransitioning) return
   isTransitioning = true
   currentPath = path
-  
   const container = document.getElementById('app')
   if (!container) {
     isTransitioning = false
     return
   }
-  
+  if (!isInitialized) {
+    container.innerHTML = '<div class="loading">Инициализация...</div>'
+    await api.init()
+    isInitialized = true
+  }
   updateNavLinks(path)
-  
   if (currentComponent && typeof currentComponent.unmount === 'function') {
     currentComponent.unmount()
     currentComponent = null
   }
-  
   container.innerHTML = ''
-  
   setTimeout(() => {
     currentComponent = new ComponentClass(props)
-    container.innerHTML = currentComponent.render()
-    
+    container.innerHTML = currentComponent.render()  
     setTimeout(() => {
       if (currentComponent && typeof currentComponent.mount === 'function') {
         currentComponent.mount()

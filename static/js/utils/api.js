@@ -1,12 +1,35 @@
+let authToken = null;
+
 const api = {
+  async init() {
+    try {
+      const response = await fetch('/api/auth/session', {
+        credentials: 'same-origin'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        authToken = data.token;
+        localStorage.setItem('authToken', authToken);
+      }
+    } catch (error) {
+      console.error('Failed to get session token:', error);
+    }
+  },
+
   getHeaders() {
-    return {
+    const headers = {
       'Content-Type': 'application/json'
     };
+    const token = authToken || localStorage.getItem('authToken');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
   },
 
   async handleResponse(response) {
     if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem('authToken');
       window.location.href = '/login';
       throw new Error('Unauthorized');
     }

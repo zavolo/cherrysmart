@@ -428,6 +428,12 @@ async def web_login():
     logger.warning(f"Неудачная попытка входа: {username} с IP {client_ip}")
     return jsonify({'error': 'Неверные учетные данные'}), 401
 
+@app.route('/api/auth/session', methods=['GET'])
+@login_required
+async def get_session_token():
+    token = create_jwt_token(session['user_id'], session['username'], session['role'])
+    return jsonify({'token': token})
+
 @app.route('/api/telegram/login', methods=['POST'])
 async def telegram_login():
     data = await request.json
